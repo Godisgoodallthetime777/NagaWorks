@@ -187,6 +187,12 @@ class ViewportScaleOverlay(QWidget):
             log_exception("scale_overlay refresh")
 
     def paintEvent(self, _event) -> None:
+        try:
+            self._paint_scale_overlay()
+        except Exception:
+            log_exception("scale_overlay paintEvent")
+
+    def _paint_scale_overlay(self) -> None:
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
 

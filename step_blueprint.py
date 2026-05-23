@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np
@@ -38,6 +39,28 @@ VIEW_LABELS: dict[str, str] = {
 BLUEPRINT_VIEWS = ("top", "front", "right", "iso")
 FIGURE_DPI = 150
 SUBPLOT_SIZE = 4.0
+
+
+@dataclass(frozen=True)
+class BlueprintSnapshot:
+    """Copied mesh edges for thread-safe / main-thread matplotlib export."""
+
+    source_name: str
+    segments_by_view: dict[str, np.ndarray]
+
+
+def build_blueprint_snapshot(model: SolidModel) -> BlueprintSnapshot:
+    """Copy all view segments on the main thread before export."""
+    segments: dict[str, np.ndarray] = {}
+    for name in BLUEPRINT_VIEWS:
+        segs = get_view_segments(model, name)
+        if segs.size:
+            segs = np.ascontiguousarray(segs, dtype=np.float64)
+        segments[name] = segs
+    return BlueprintSnapshot(
+        source_name=Path(model.source_path).name,
+        segments_by_view=segments,
+    )
 
 
 def get_view_segments(model: SolidModel, view: str) -> np.ndarray:
@@ -127,6 +150,7 @@ def _draw_view(ax: plt.Axes, segments: np.ndarray, title: str) -> None:
         ax.set_yticks([])
         return
 
+    segments = np.ascontiguousarray(segments, dtype=np.float64)
     lc = LineCollection(
         segments,
         colors="#111111",
@@ -160,8 +184,18 @@ def export_blueprint(
     *,
     views: tuple[str, ...] = BLUEPRINT_VIEWS,
 ) -> Path:
+    """Save a 2×2 blueprint sheet (PNG or PDF) with orthographic views."""
+    return export_blueprint_snapshot(build_blueprint_snapshot(model), path, views=views)
+
+
+def export_blueprint_snapshot(
+    snapshot: BlueprintSnapshot,
+    path: Path,
+    *,
+    views: tuple[str, ...] = BLUEPRINT_VIEWS,
+) -> Path:
     """
-    Save a 2×2 blueprint sheet (PNG or PDF) with orthographic views.
+    Save blueprint from pre-copied segments (call on the Qt main thread).
 
     Returns the path written.
     """
@@ -170,7 +204,7 @@ def export_blueprint(
 
     fig, axes = plt.subplots(2, 2, figsize=(SUBPLOT_SIZE * 2, SUBPLOT_SIZE * 2), dpi=FIGURE_DPI)
     fig.patch.set_facecolor("white")
-    source_name = Path(model.source_path).name
+    source_name = snapshot.source_name
 
     view_axes = {
         "top": axes[0, 0],
@@ -183,13 +217,7 @@ def export_blueprint(
         ax = view_axes.get(name)
         if ax is None:
             continue
-        if name == "iso":
-            segments = _isometric_segments(model)
-        else:
-            axes_idx = VIEW_PROJECTIONS.get(name)
-            if axes_idx is None:
-                continue
-            segments = _segments_for_view(model, axes_idx[0], axes_idx[1])
+        segments = snapshot.segments_by_view.get(name, np.empty((0, 2, 2)))
         _draw_view(ax, segments, VIEW_LABELS.get(name, name.upper()))
 
     for ax in axes.ravel():

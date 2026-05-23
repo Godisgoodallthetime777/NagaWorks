@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np
 
 from step_blueprint import get_view_segments
 from step_mesh_viewer import SolidModel
+
+MeshPartArrays = tuple[np.ndarray, np.ndarray]  # vertices, faces
 
 try:
     import matplotlib
@@ -75,16 +78,51 @@ def _add_paper_texture(ax: plt.Axes, rng: np.random.Generator) -> None:
     )
 
 
-def _add_tone_shading(ax: plt.Axes, model: SolidModel, view: str, rng: np.random.Generator) -> None:
+@dataclass(frozen=True)
+class SketchSnapshot:
+    """Copied mesh data for main-thread matplotlib export."""
+
+    source_stem: str
+    view: str
+    segments: np.ndarray
+    parts: tuple[MeshPartArrays, ...]
+
+
+def build_sketch_snapshot(model: SolidModel, view: str = DEFAULT_VIEW) -> SketchSnapshot:
+    segs = get_view_segments(model, view)
+    if segs.size:
+        segs = np.ascontiguousarray(segs, dtype=np.float64)
+    parts = tuple(
+        (
+            np.ascontiguousarray(part.vertices, dtype=np.float64),
+            np.ascontiguousarray(part.faces, dtype=np.int64),
+        )
+        for part in model.parts
+        if len(part.faces) > 0
+    )
+    return SketchSnapshot(
+        source_stem=Path(model.source_path).stem,
+        view=view,
+        segments=segs,
+        parts=parts,
+    )
+
+
+def _add_tone_shading(
+    ax: plt.Axes,
+    parts: tuple[MeshPartArrays, ...],
+    view: str,
+    rng: np.random.Generator,
+) -> None:
     """Soft graphite shading from face normals (drawn under the linework)."""
     polys: list[np.ndarray] = []
     tones: list[float] = []
 
-    for part in model.parts:
-        if len(part.faces) == 0:
+    for vertices, faces in parts:
+        if len(faces) == 0:
             continue
-        v = part.vertices
-        for tri in part.faces:
+        v = vertices
+        for tri in faces:
             idx = tri.astype(int)
             pts = v[idx]
             e1 = pts[1] - pts[0]
@@ -162,7 +200,7 @@ def _sketchy_line_collections(
 
 def _draw_pencil_sketch(
     ax: plt.Axes,
-    model: SolidModel,
+    parts: tuple[MeshPartArrays, ...],
     segments: np.ndarray,
     *,
     view: str,
@@ -189,7 +227,7 @@ def _draw_pencil_sketch(
         )
         return
 
-    _add_tone_shading(ax, model, view, rng)
+    _add_tone_shading(ax, parts, view, rng)
 
     xs = segments[:, :, 0].ravel()
     ys = segments[:, :, 1].ravel()
@@ -220,17 +258,18 @@ def export_pencil_sketch(
     *,
     view: str = DEFAULT_VIEW,
 ) -> Path:
+    """Save a single pencil-sketch image (PNG, JPEG, or PDF)."""
+    return export_pencil_sketch_snapshot(build_sketch_snapshot(model, view), path)
+
+
+def export_pencil_sketch_snapshot(snapshot: SketchSnapshot, path: Path) -> Path:
     """
-    Save a single pencil-sketch image (PNG, JPEG, or PDF).
+    Save sketch from pre-copied mesh data (call on the Qt main thread).
 
     Returns the path written.
     """
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
-
-    segments = get_view_segments(model, view)
-    source_name = Path(model.source_path).stem
-    view_label = view.replace("_", " ").title()
 
     fig, ax = plt.subplots(
         1,
@@ -242,10 +281,10 @@ def export_pencil_sketch(
 
     _draw_pencil_sketch(
         ax,
-        model,
-        segments,
-        view=view,
-        title=f"{source_name} — pencil sketch",
+        snapshot.parts,
+        snapshot.segments,
+        view=snapshot.view,
+        title=f"{snapshot.source_stem} — pencil sketch",
     )
 
     fig.tight_layout()

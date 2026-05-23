@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import os
 import sys
+import tempfile
 import threading
 from pathlib import Path
 
@@ -43,6 +44,7 @@ from PySide6.QtWidgets import (
     QButtonGroup,
     QCheckBox,
     QColorDialog,
+    QDialog,
     QFileDialog,
     QHBoxLayout,
     QInputDialog,
@@ -83,20 +85,42 @@ except ImportError as exc:
 _BLUEPRINT_AVAILABLE = True
 _BLUEPRINT_IMPORT_ERROR = ""
 try:
-    from step_blueprint import export_blueprint
+    from step_blueprint import build_blueprint_snapshot, export_blueprint_snapshot
 except ImportError as exc:
     _BLUEPRINT_AVAILABLE = False
     _BLUEPRINT_IMPORT_ERROR = str(exc)
-    export_blueprint = None  # type: ignore
+    build_blueprint_snapshot = None  # type: ignore
+    export_blueprint_snapshot = None  # type: ignore
 
 _PENCIL_SKETCH_AVAILABLE = True
 _PENCIL_SKETCH_IMPORT_ERROR = ""
 try:
-    from step_pencil_sketch import export_pencil_sketch
+    from step_pencil_sketch import build_sketch_snapshot, export_pencil_sketch_snapshot
 except ImportError as exc:
     _PENCIL_SKETCH_AVAILABLE = False
     _PENCIL_SKETCH_IMPORT_ERROR = str(exc)
-    export_pencil_sketch = None  # type: ignore
+    build_sketch_snapshot = None  # type: ignore
+    export_pencil_sketch_snapshot = None  # type: ignore
+
+_DPR_AVAILABLE = True
+_DPR_IMPORT_ERROR = ""
+try:
+    from step_dpr_report import build_dpr_snapshot, export_dpr_snapshot
+except ImportError as exc:
+    _DPR_AVAILABLE = False
+    _DPR_IMPORT_ERROR = str(exc)
+    build_dpr_snapshot = None  # type: ignore
+    export_dpr_snapshot = None  # type: ignore
+
+_PRINT_AVAILABLE = True
+_PRINT_IMPORT_ERROR = ""
+try:
+    from step_printer_dialog import PrinterSelectDialog, print_image
+except ImportError as exc:
+    _PRINT_AVAILABLE = False
+    _PRINT_IMPORT_ERROR = str(exc)
+    PrinterSelectDialog = None  # type: ignore
+    print_image = None  # type: ignore
 
 
 class ModelLoadBridge(QObject):
@@ -174,6 +198,8 @@ class StepFileEditor(QMainWindow):
         self._viewport_host: QWidget | None = None
         self._viewport_layout: QVBoxLayout | None = None
         self._last_reflow_size: tuple[int, int] | None = None
+        self._export_in_progress = False
+        self._ruler_was_enabled_before_export = False
 
         self._build_ui()
         self._build_actions()
@@ -264,6 +290,21 @@ class StepFileEditor(QMainWindow):
             sketch_btn.setToolTip("Save a hand-drawn pencil sketch image (PNG/JPEG)")
             sketch_btn.clicked.connect(self._export_pencil_sketch)
             controls.addWidget(sketch_btn)
+            dpr_btn = QPushButton("DPR…")
+            dpr_btn.setToolTip(
+                "Detailed Print Report — save an image with dimensions (mm/cm/in/nm), "
+                "volume, and 3D print checklist"
+            )
+            dpr_btn.clicked.connect(self._export_dpr)
+            controls.addWidget(dpr_btn)
+            if _PRINT_AVAILABLE and _DPR_AVAILABLE:
+                print_btn = QPushButton("Print…")
+                print_btn.setToolTip(
+                    "Print Detailed Print Report — detects 3D printers "
+                    "(Bambu Lab, Prusa, Creality, …) and other system printers"
+                )
+                print_btn.clicked.connect(self._print_dpr)
+                controls.addWidget(print_btn)
             controls.addStretch()
             hint = QLabel("F12 = expand 3D • Esc = exit • Maximize window for more space")
             hint.setStyleSheet("color: #666;")
@@ -431,6 +472,24 @@ class StepFileEditor(QMainWindow):
             sketch_action.triggered.connect(self._export_pencil_sketch)
             toolbar.addAction(sketch_action)
             self.addAction(sketch_action)
+
+        if _DPR_AVAILABLE:
+            dpr_action = QAction("DPR", self)
+            dpr_action.setShortcut(QKeySequence("Ctrl+Shift+D"))
+            dpr_action.setToolTip("Save Detailed Print Report image for 3D printing")
+            dpr_action.triggered.connect(self._export_dpr)
+            toolbar.addAction(dpr_action)
+            self.addAction(dpr_action)
+
+        if _PRINT_AVAILABLE and _DPR_AVAILABLE:
+            print_action = QAction("Print", self)
+            print_action.setShortcut(QKeySequence.Print)
+            print_action.setToolTip(
+                "Print Detailed Print Report to a 3D or system printer"
+            )
+            print_action.triggered.connect(self._print_dpr)
+            toolbar.addAction(print_action)
+            self.addAction(print_action)
 
         find_action = QAction("Find", self)
         find_action.setShortcut(QKeySequence.Find)
@@ -662,7 +721,12 @@ class StepFileEditor(QMainWindow):
         return self.tabs.currentWidget() is self._view3d_panel
 
     def _schedule_viewport_fit(self) -> None:
-        if not _VIEWER_AVAILABLE or not self.vtk_view or self._fullscreen_transition:
+        if (
+            not _VIEWER_AVAILABLE
+            or not self.vtk_view
+            or self._fullscreen_transition
+            or self._export_in_progress
+        ):
             return
         self._viewport_fit_timer.start()
 
@@ -1045,6 +1109,29 @@ class StepFileEditor(QMainWindow):
     def _reset_3d_camera(self) -> None:
         self._set_3d_view("iso")
 
+    def _begin_export_pause(self) -> None:
+        """Pause VTK/ruler during matplotlib work (must run on the main thread)."""
+        self._export_in_progress = True
+        self._ruler_was_enabled_before_export = False
+        if _VIEWER_AVAILABLE and self.vtk_view is not None and hasattr(self, "ruler_check"):
+            self._ruler_was_enabled_before_export = self.ruler_check.isChecked()
+            self.vtk_view.set_render_paused(True)
+            if self._ruler_was_enabled_before_export:
+                self.vtk_view.set_ruler_visible(False)
+        QApplication.processEvents()
+
+    def _end_export_pause(self) -> None:
+        self._export_in_progress = False
+        if _VIEWER_AVAILABLE and self.vtk_view is not None:
+            if self._ruler_was_enabled_before_export:
+                self.vtk_view.set_ruler_visible(True)
+            self.vtk_view.set_render_paused(False)
+            self._schedule_viewport_fit_after_export()
+
+    def _schedule_viewport_fit_after_export(self) -> None:
+        self._last_reflow_size = None
+        QTimer.singleShot(150, self._reflow_3d_after_resize)
+
     def _show_about(self) -> None:
         box = QMessageBox(self)
         box.setWindowTitle(APP_DISPLAY_NAME)
@@ -1091,18 +1178,20 @@ class StepFileEditor(QMainWindow):
         self.status_bar.showMessage(f"Generating blueprint for {self.current_file.name}…")
         QApplication.processEvents()
 
-        def worker() -> None:
-            error = ""
-            saved = str(out_path)
-            try:
-                saved = str(export_blueprint(model, out_path))
-                log.info("Blueprint saved: %s", saved)
-            except Exception as exc:
-                error = str(exc)
-                log.exception("Blueprint export failed")
-            self._blueprint_bridge.finished.emit(saved, error)
+        error = ""
+        saved = str(out_path)
+        self._begin_export_pause()
+        try:
+            snapshot = build_blueprint_snapshot(model)
+            saved = str(export_blueprint_snapshot(snapshot, out_path))
+            log.info("Blueprint saved: %s", saved)
+        except Exception as exc:
+            error = str(exc)
+            log.exception("Blueprint export failed")
+        finally:
+            self._end_export_pause()
 
-        threading.Thread(target=worker, daemon=True, name="blueprint-export").start()
+        self._on_blueprint_exported(saved, error)
 
     def _on_blueprint_exported(self, path: str, error: str) -> None:
         if error:
@@ -1155,18 +1244,20 @@ class StepFileEditor(QMainWindow):
         self.status_bar.showMessage(f"Drawing pencil sketch for {self.current_file.name}…")
         QApplication.processEvents()
 
-        def worker() -> None:
-            error = ""
-            saved = str(out_path)
-            try:
-                saved = str(export_pencil_sketch(model, out_path))
-                log.info("Pencil sketch saved: %s", saved)
-            except Exception as exc:
-                error = str(exc)
-                log.exception("Pencil sketch export failed")
-            self._sketch_bridge.finished.emit(saved, error)
+        error = ""
+        saved = str(out_path)
+        self._begin_export_pause()
+        try:
+            snapshot = build_sketch_snapshot(model)
+            saved = str(export_pencil_sketch_snapshot(snapshot, out_path))
+            log.info("Pencil sketch saved: %s", saved)
+        except Exception as exc:
+            error = str(exc)
+            log.exception("Pencil sketch export failed")
+        finally:
+            self._end_export_pause()
 
-        threading.Thread(target=worker, daemon=True, name="pencil-sketch-export").start()
+        self._on_pencil_sketch_exported(saved, error)
 
     def _on_pencil_sketch_exported(self, path: str, error: str) -> None:
         if error:
@@ -1188,6 +1279,145 @@ class StepFileEditor(QMainWindow):
         )
         if answer == QMessageBox.Yes:
             QDesktopServices.openUrl(QUrl.fromLocalFile(path))
+
+    def _export_dpr(self) -> None:
+        if not _DPR_AVAILABLE:
+            QMessageBox.warning(
+                self,
+                "DPR",
+                "Detailed Print Report requires matplotlib.\n\n"
+                "Run: pip install -r requirements.txt\n\n"
+                f"{_DPR_IMPORT_ERROR}",
+            )
+            return
+        if self._solid_model is None or self.current_file is None:
+            QMessageBox.information(
+                self,
+                "DPR",
+                "Open a STEP file and wait for the 3D model to load first.",
+            )
+            return
+
+        default_name = f"{self.current_file.stem}_DPR.png"
+        default_path = self.current_file.parent / default_name
+        chosen, _ = QFileDialog.getSaveFileName(
+            self,
+            "Save Detailed Print Report (DPR)",
+            str(default_path),
+            "PNG image (*.png);;PDF document (*.pdf);;JPEG image (*.jpg *.jpeg)",
+        )
+        if not chosen:
+            return
+
+        out_path = Path(chosen)
+        model = self._solid_model
+        self.status_bar.showMessage(f"Building DPR for {self.current_file.name}…")
+        QApplication.processEvents()
+
+        error = ""
+        saved = str(out_path)
+        self._begin_export_pause()
+        try:
+            snapshot = build_dpr_snapshot(model)
+            saved = str(export_dpr_snapshot(snapshot, out_path))
+            log.info("DPR saved: %s", saved)
+        except Exception as exc:
+            error = str(exc)
+            log.exception("DPR export failed")
+        finally:
+            self._end_export_pause()
+
+        if error:
+            QMessageBox.critical(self, "DPR failed", f"Could not create print report:\n{error}")
+            self.status_bar.showMessage("DPR export failed")
+            return
+
+        self.status_bar.showMessage(f"DPR saved — {saved}")
+        answer = QMessageBox.question(
+            self,
+            "DPR saved",
+            f"Detailed Print Report saved to:\n{saved}\n\nOpen the image now?",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.Yes,
+        )
+        if answer == QMessageBox.Yes:
+            QDesktopServices.openUrl(QUrl.fromLocalFile(saved))
+
+    def _print_dpr(self) -> None:
+        if not _PRINT_AVAILABLE:
+            QMessageBox.warning(
+                self,
+                "Print",
+                "Print support is unavailable.\n\n"
+                f"{_PRINT_IMPORT_ERROR}",
+            )
+            return
+        if not _DPR_AVAILABLE:
+            QMessageBox.warning(
+                self,
+                "Print",
+                "Printing requires the Detailed Print Report module (matplotlib).\n\n"
+                f"{_DPR_IMPORT_ERROR}",
+            )
+            return
+        if self._solid_model is None or self.current_file is None:
+            QMessageBox.information(
+                self,
+                "Print",
+                "Open a STEP file and wait for the 3D model to load first.",
+            )
+            return
+
+        dialog = PrinterSelectDialog(self)
+        if dialog.exec() != QDialog.DialogCode.Accepted or dialog.selected_printer is None:
+            return
+
+        printer = dialog.selected_printer
+        temp_dir = Path(tempfile.gettempdir()) / "nagaworks_step_editor"
+        temp_dir.mkdir(parents=True, exist_ok=True)
+        temp_path = temp_dir / f"{self.current_file.stem}_DPR_print.png"
+
+        model = self._solid_model
+        self.status_bar.showMessage(f"Preparing print report for {self.current_file.name}…")
+        QApplication.processEvents()
+
+        error = ""
+        self._begin_export_pause()
+        try:
+            snapshot = build_dpr_snapshot(model)
+            export_dpr_snapshot(snapshot, temp_path)
+            log.info("DPR print image: %s", temp_path)
+        except Exception as exc:
+            error = str(exc)
+            log.exception("DPR print preparation failed")
+        finally:
+            self._end_export_pause()
+
+        if error:
+            QMessageBox.critical(
+                self,
+                "Print failed",
+                f"Could not prepare print report:\n{error}",
+            )
+            self.status_bar.showMessage("Print preparation failed")
+            return
+
+        self.status_bar.showMessage(f"Printing to {printer.name}…")
+        QApplication.processEvents()
+
+        try:
+            printed = print_image(temp_path, printer.name, parent=self)
+        except Exception as exc:
+            log.exception("Print failed")
+            QMessageBox.critical(self, "Print failed", f"Could not print:\n{exc}")
+            self.status_bar.showMessage("Print failed")
+            return
+
+        if printed:
+            label = printer.brand or printer.name
+            self.status_bar.showMessage(f"Sent to printer — {label}")
+        else:
+            self.status_bar.showMessage("Print cancelled")
 
     def closeEvent(self, event) -> None:
         if not self._confirm_discard():

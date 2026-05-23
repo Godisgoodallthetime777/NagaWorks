@@ -127,7 +127,7 @@ class Vtk3DWidget(QWidget):
             self._scale_overlay.refresh()
 
     def _schedule_ruler_update(self) -> None:
-        if not self._ruler_enabled:
+        if not self._ruler_enabled or self._render_paused:
             return
         if not self._ruler_update_pending:
             self._ruler_update_pending = True

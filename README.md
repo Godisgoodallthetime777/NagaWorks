@@ -6,6 +6,7 @@ Published by **NagaSoftLabs.com** · [Naga Soft Labs](https://nagasoftlabs.com/)
 
 ![NagaWorks](image.png)
 ![NagaWorks](draw.png)
+![NagaWorks](Bar1in_DPR.png)
 
 ---
 

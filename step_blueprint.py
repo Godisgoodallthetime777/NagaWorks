@@ -151,6 +151,8 @@ def _draw_view(ax: plt.Axes, segments: np.ndarray, title: str) -> None:
         return
 
     segments = np.ascontiguousarray(segments, dtype=np.float64)
+    if segments.ndim != 3 or segments.shape[1:] != (2, 2):
+        raise ValueError(f"Blueprint segments must be Nx2x2, got {segments.shape}")
     lc = LineCollection(
         segments,
         colors="#111111",

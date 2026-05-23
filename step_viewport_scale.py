@@ -109,6 +109,7 @@ class ViewportScaleOverlay(QWidget):
         self._subtitle = "CAD units → mm basis"
         self._plotter_provider: Callable | None = None
         self._bounds_provider: Callable | None = None
+        self._paint_frozen = False
 
         self._refresh_timer = QTimer(self)
         self._refresh_timer.setInterval(500)
@@ -131,11 +132,20 @@ class ViewportScaleOverlay(QWidget):
         if active:
             self.show()
             self.raise_()
-            self._refresh_timer.start()
-            self.refresh()
+            if not self._paint_frozen:
+                self._refresh_timer.start()
+                self.refresh()
         else:
             self._refresh_timer.stop()
             self.hide()
+
+    def set_paint_frozen(self, frozen: bool) -> None:
+        """Skip paint/refresh while VTK or matplotlib export is in progress."""
+        self._paint_frozen = frozen
+        if frozen:
+            self._refresh_timer.stop()
+        elif self.isVisible():
+            self._refresh_timer.start()
 
     def reposition(self) -> None:
         parent = self.parentWidget()
@@ -148,7 +158,7 @@ class ViewportScaleOverlay(QWidget):
         self.raise_()
 
     def refresh(self) -> None:
-        if not self.isVisible() or self._plotter_provider is None:
+        if self._paint_frozen or not self.isVisible() or self._plotter_provider is None:
             return
         try:
             plotter = self._plotter_provider()
@@ -187,6 +197,8 @@ class ViewportScaleOverlay(QWidget):
             log_exception("scale_overlay refresh")
 
     def paintEvent(self, _event) -> None:
+        if self._paint_frozen:
+            return
         try:
             self._paint_scale_overlay()
         except Exception:

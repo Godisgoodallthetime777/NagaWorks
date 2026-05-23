@@ -153,6 +153,8 @@ class Vtk3DWidget(QWidget):
     def set_render_paused(self, paused: bool) -> None:
         """Pause VTK resize/render during layout changes (main window schedules reflow)."""
         self._render_paused = paused
+        if hasattr(self, "_scale_overlay"):
+            self._scale_overlay.set_paint_frozen(paused)
         if not paused and self._initialized and self.isVisible():
             w, h = self.width(), self.height()
             if w >= 16 and h >= 16:

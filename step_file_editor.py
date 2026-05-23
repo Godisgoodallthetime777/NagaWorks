@@ -102,6 +102,17 @@ except ImportError as exc:
     build_sketch_snapshot = None  # type: ignore
     export_pencil_sketch_snapshot = None  # type: ignore
 
+_COLOR_PENCIL_AVAILABLE = True
+_COLOR_PENCIL_IMPORT_ERROR = ""
+try:
+    from step_color_pencil_sketch import (
+        export_color_pencil_sketch_snapshot,
+    )
+except ImportError as exc:
+    _COLOR_PENCIL_AVAILABLE = False
+    _COLOR_PENCIL_IMPORT_ERROR = str(exc)
+    export_color_pencil_sketch_snapshot = None  # type: ignore
+
 _DPR_AVAILABLE = True
 _DPR_IMPORT_ERROR = ""
 try:
@@ -290,6 +301,13 @@ class StepFileEditor(QMainWindow):
             sketch_btn.setToolTip("Save a hand-drawn pencil sketch image (PNG/JPEG)")
             sketch_btn.clicked.connect(self._export_pencil_sketch)
             controls.addWidget(sketch_btn)
+            if _COLOR_PENCIL_AVAILABLE and _PENCIL_SKETCH_AVAILABLE:
+                color_pencil_btn = QPushButton("Color Pencil…")
+                color_pencil_btn.setToolTip(
+                    "Save a hand-drawn color pencil sketch (blue, pink, orange tones)"
+                )
+                color_pencil_btn.clicked.connect(self._export_color_pencil_sketch)
+                controls.addWidget(color_pencil_btn)
             dpr_btn = QPushButton("DPR…")
             dpr_btn.setToolTip(
                 "Detailed Print Report — save an image with dimensions (mm/cm/in/nm), "
@@ -472,6 +490,16 @@ class StepFileEditor(QMainWindow):
             sketch_action.triggered.connect(self._export_pencil_sketch)
             toolbar.addAction(sketch_action)
             self.addAction(sketch_action)
+
+        if _COLOR_PENCIL_AVAILABLE and _PENCIL_SKETCH_AVAILABLE:
+            color_pencil_action = QAction("Color Pencil", self)
+            color_pencil_action.setShortcut(QKeySequence("Ctrl+Shift+C"))
+            color_pencil_action.setToolTip(
+                "Save a color pencil sketch with hand-drawn strokes and muted tones"
+            )
+            color_pencil_action.triggered.connect(self._export_color_pencil_sketch)
+            toolbar.addAction(color_pencil_action)
+            self.addAction(color_pencil_action)
 
         if _DPR_AVAILABLE:
             dpr_action = QAction("DPR", self)
@@ -1279,6 +1307,79 @@ class StepFileEditor(QMainWindow):
         )
         if answer == QMessageBox.Yes:
             QDesktopServices.openUrl(QUrl.fromLocalFile(path))
+
+    def _export_color_pencil_sketch(self) -> None:
+        if not _COLOR_PENCIL_AVAILABLE or not _PENCIL_SKETCH_AVAILABLE:
+            QMessageBox.warning(
+                self,
+                "Color Pencil",
+                "Color pencil sketch requires matplotlib and the pencil sketch module.\n\n"
+                "Run: pip install -r requirements.txt\n\n"
+                f"{_COLOR_PENCIL_IMPORT_ERROR or _PENCIL_SKETCH_IMPORT_ERROR}",
+            )
+            return
+        if self._solid_model is None or self.current_file is None:
+            QMessageBox.information(
+                self,
+                "Color Pencil",
+                "Open a STEP file and wait for the 3D model to load first.",
+            )
+            return
+
+        default_name = f"{self.current_file.stem}_color_pencil.png"
+        default_path = self.current_file.parent / default_name
+        chosen, _ = QFileDialog.getSaveFileName(
+            self,
+            "Save Color Pencil Sketch",
+            str(default_path),
+            "PNG image (*.png);;JPEG image (*.jpg *.jpeg);;PDF document (*.pdf)",
+        )
+        if not chosen:
+            return
+
+        out_path = Path(chosen)
+        model = self._solid_model
+        self.status_bar.showMessage(f"Drawing color pencil sketch for {self.current_file.name}…")
+        QApplication.processEvents()
+
+        error = ""
+        saved = str(out_path)
+        self._begin_export_pause()
+        try:
+            snapshot = build_sketch_snapshot(model)
+
+            def _keep_ui_responsive() -> None:
+                QApplication.processEvents()
+
+            saved = str(
+                export_color_pencil_sketch_snapshot(snapshot, out_path, tick=_keep_ui_responsive)
+            )
+            log.info("Color pencil sketch saved: %s", saved)
+        except Exception as exc:
+            error = str(exc)
+            log.exception("Color pencil sketch export failed")
+        finally:
+            self._end_export_pause()
+
+        if error:
+            QMessageBox.critical(
+                self,
+                "Color pencil sketch failed",
+                f"Could not create color pencil sketch:\n{error}",
+            )
+            self.status_bar.showMessage("Color pencil sketch export failed")
+            return
+
+        self.status_bar.showMessage(f"Color pencil sketch saved — {saved}")
+        answer = QMessageBox.question(
+            self,
+            "Color pencil sketch saved",
+            f"Color pencil sketch saved to:\n{saved}\n\nOpen the image now?",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.Yes,
+        )
+        if answer == QMessageBox.Yes:
+            QDesktopServices.openUrl(QUrl.fromLocalFile(saved))
 
     def _export_dpr(self) -> None:
         if not _DPR_AVAILABLE:

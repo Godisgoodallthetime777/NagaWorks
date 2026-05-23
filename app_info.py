@@ -11,6 +11,8 @@ APP_VENDOR = "NagaWorks"
 APP_PRODUCT = "STEP File Editor"
 APP_VERSION = "1.1"
 APP_DISPLAY_NAME = f"{APP_VENDOR} {APP_PRODUCT} V{APP_VERSION}"
+# Short name for title bar / taskbar (Windows appends this after the window title).
+APP_TITLE_BRAND = APP_VENDOR
 APP_DESCRIPTION = (
     "View and edit STEP (.stp) files with GPU 3D preview, "
     "technical blueprints, and pencil sketch export."
@@ -29,9 +31,10 @@ def app_logo_path() -> Path | None:
 
 
 def window_title(file_name: str | None = None) -> str:
+    """Single title-bar string (avoids Windows appending a duplicate app name)."""
     if file_name:
-        return f"{APP_DISPLAY_NAME} — {file_name}"
-    return APP_DISPLAY_NAME
+        return f"{file_name} – {APP_TITLE_BRAND}"
+    return APP_TITLE_BRAND
 
 
 def about_text() -> str:

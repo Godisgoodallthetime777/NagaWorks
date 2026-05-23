@@ -17,6 +17,7 @@ from pyvistaqt import QtInteractor
 
 from app_logging import get_logger, log_exception
 from step_mesh_viewer import SolidModel
+from step_viewport_scale import ViewportScaleOverlay
 
 log = get_logger()
 
@@ -53,6 +54,13 @@ class Vtk3DWidget(QWidget):
         self._fullscreen_toggle: Callable[[], None] | None = None
         self._render_paused = False
         self._pending_fit: tuple[int, int] | None = None
+        self._ruler_enabled = False
+        self._ruler_unit = "mm"
+        self._ruler_update_pending = False
+        self._ruler_timer = QTimer(self)
+        self._ruler_timer.setSingleShot(True)
+        self._ruler_timer.setInterval(80)
+        self._ruler_timer.timeout.connect(self._apply_ruler_update)
 
         self.setMinimumSize(200, 200)
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
@@ -75,6 +83,69 @@ class Vtk3DWidget(QWidget):
         self.setFocusPolicy(Qt.StrongFocus)
         interactor.setFocusPolicy(Qt.StrongFocus)
         self._bind_shortcuts()
+
+        self._scale_overlay = ViewportScaleOverlay(self)
+        self._scale_overlay.set_providers(
+            plotter_provider=lambda: self.plotter,
+            bounds_provider=self._model_bounds,
+        )
+        self._scale_overlay.hide()
+        self._hook_interaction_updates()
+
+    def _hook_interaction_updates(self) -> None:
+        """VTK fires observers off the GUI thread — always defer ruler work to Qt."""
+        try:
+            iren = self.plotter.interactor
+
+            def _on_camera_changed(*_args) -> None:
+                self._schedule_ruler_update()
+
+            iren.AddObserver("EndInteractionEvent", _on_camera_changed)
+            iren.AddObserver("MouseWheelForwardEvent", _on_camera_changed)
+            iren.AddObserver("MouseWheelBackwardEvent", _on_camera_changed)
+        except Exception:
+            log_exception("_hook_interaction_updates")
+
+    def _model_bounds(self):
+        if self._model is None:
+            return None
+        return self._model.bounds
+
+    def set_ruler_visible(self, visible: bool) -> None:
+        self._ruler_enabled = visible
+        if visible:
+            self._scale_overlay.set_unit(self._ruler_unit)
+            self._scale_overlay.set_active(True)
+            self._position_scale_overlay()
+        else:
+            self._scale_overlay.set_active(False)
+
+    def set_ruler_unit(self, unit_key: str) -> None:
+        self._ruler_unit = unit_key
+        self._scale_overlay.set_unit(unit_key)
+        if self._ruler_enabled:
+            self._scale_overlay.refresh()
+
+    def _schedule_ruler_update(self) -> None:
+        if not self._ruler_enabled:
+            return
+        if not self._ruler_update_pending:
+            self._ruler_update_pending = True
+            QTimer.singleShot(0, self._ruler_timer.start)
+
+    def _apply_ruler_update(self) -> None:
+        self._ruler_update_pending = False
+        if not self._ruler_enabled or self._render_paused:
+            return
+        try:
+            self._position_scale_overlay()
+            self._scale_overlay.refresh()
+        except Exception:
+            log_exception("_apply_ruler_update")
+
+    def _position_scale_overlay(self) -> None:
+        if hasattr(self, "_scale_overlay"):
+            self._scale_overlay.reposition()
 
     def set_fullscreen_toggle(self, callback: Callable[[], None]) -> None:
         self._fullscreen_toggle = callback
@@ -103,6 +174,7 @@ class Vtk3DWidget(QWidget):
             return
         if self._initialized:
             QTimer.singleShot(0, lambda: self.fit_viewport(size.width(), size.height()))
+        self._schedule_ruler_update()
 
     def get_display_color(self) -> str:
         return self._display_color
@@ -155,6 +227,8 @@ class Vtk3DWidget(QWidget):
         self.plotter.clear()
         self.plotter.background_color = VIEWER_BACKGROUND
         self.plotter.render()
+        if hasattr(self, "_scale_overlay"):
+            self._scale_overlay.set_active(False)
 
     def set_wireframe(self, enabled: bool) -> None:
         self._wireframe = enabled
@@ -205,6 +279,7 @@ class Vtk3DWidget(QWidget):
             self.set_standard_view("iso")
         else:
             self._force_render()
+        self._schedule_ruler_update()
 
     def _update_actor_properties(self) -> None:
         if not self._cached_meshes:
@@ -227,6 +302,7 @@ class Vtk3DWidget(QWidget):
         view_fn(self.plotter)
         self.plotter.reset_camera()
         self._force_render()
+        self._schedule_ruler_update()
 
     def fit_viewport(self, width: int, height: int) -> None:
         """Resize VTK render area to fill the available widget space."""
@@ -247,6 +323,7 @@ class Vtk3DWidget(QWidget):
             except Exception:
                 pass
             self.plotter.render()
+            self._schedule_ruler_update()
         except Exception:
             log_exception("fit_viewport")
 
@@ -259,6 +336,7 @@ class Vtk3DWidget(QWidget):
             if rw is not None:
                 rw.Render()
             self.plotter.interactor.Render()
+            self._schedule_ruler_update()
         except Exception:
             log_exception("_force_render")
 
@@ -274,6 +352,10 @@ class Vtk3DWidget(QWidget):
         self.set_standard_view("iso")
 
     def closeEvent(self, event) -> None:
+        self._ruler_enabled = False
+        if hasattr(self, "_scale_overlay"):
+            self._scale_overlay.set_active(False)
+        self._ruler_timer.stop()
         try:
             self.plotter.close()
         except Exception:

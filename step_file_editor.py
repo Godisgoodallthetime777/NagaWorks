@@ -14,6 +14,7 @@ os.environ.setdefault("QT_API", "pyside6")
 from app_info import (
     APP_DISPLAY_NAME,
     APP_LOGO_FILE,
+    APP_TITLE_BRAND,
     APP_VENDOR,
     APP_VERSION,
     about_text,
@@ -39,6 +40,7 @@ from PySide6.QtGui import (
 )
 from PySide6.QtWidgets import (
     QApplication,
+    QButtonGroup,
     QCheckBox,
     QColorDialog,
     QFileDialog,
@@ -52,6 +54,7 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QPlainTextEdit,
     QPushButton,
+    QRadioButton,
     QSlider,
     QSplitter,
     QStackedWidget,
@@ -170,6 +173,7 @@ class StepFileEditor(QMainWindow):
         self._suppress_file_select = False
         self._viewport_host: QWidget | None = None
         self._viewport_layout: QVBoxLayout | None = None
+        self._last_reflow_size: tuple[int, int] | None = None
 
         self._build_ui()
         self._build_actions()
@@ -308,6 +312,35 @@ class StepFileEditor(QMainWindow):
             appearance_row.addStretch()
             view3d_layout.addLayout(appearance_row)
 
+            ruler_row = QHBoxLayout()
+            self.ruler_check = QCheckBox("Ruler")
+            self.ruler_check.setToolTip(
+                "Show a futuristic scale bar in the corner (zoom-aware). "
+                "STEP coordinates are interpreted as millimeters."
+            )
+            self.ruler_check.toggled.connect(self._on_ruler_toggled)
+            ruler_row.addWidget(self.ruler_check)
+            ruler_row.addSpacing(8)
+            ruler_row.addWidget(QLabel("Units:"))
+            self._ruler_unit_group = QButtonGroup(self)
+            self._unit_radios: dict[str, QRadioButton] = {}
+            for unit_key, unit_label in (
+                ("nm", "nm"),
+                ("mm", "mm"),
+                ("cm", "cm"),
+                ("m", "m"),
+                ("in", "in"),
+            ):
+                radio = QRadioButton(unit_label)
+                radio.setToolTip(f"Display scale in {unit_label}")
+                self._ruler_unit_group.addButton(radio)
+                self._unit_radios[unit_key] = radio
+                ruler_row.addWidget(radio)
+            self._unit_radios["mm"].setChecked(True)
+            self._ruler_unit_group.buttonClicked.connect(self._on_ruler_unit_changed)
+            ruler_row.addStretch()
+            view3d_layout.addLayout(ruler_row)
+
             self.view3d_stack = QStackedWidget()
             self.view3d_stack.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
             self.view3d_stack.setStyleSheet(f"background-color: {VIEWER_BACKGROUND};")
@@ -353,9 +386,9 @@ class StepFileEditor(QMainWindow):
         log_link.setOpenExternalLinks(True)
         log_link.setToolTip(str(log_path))
         self.status_bar.addPermanentWidget(log_link)
-        version_label = QLabel(APP_DISPLAY_NAME)
+        version_label = QLabel(f"{APP_TITLE_BRAND} V{APP_VERSION}")
         version_label.setStyleSheet("color: #888; padding-left: 12px;")
-        version_label.setToolTip(f"{APP_VENDOR} • Version {APP_VERSION}")
+        version_label.setToolTip(APP_DISPLAY_NAME)
         self.status_bar.addPermanentWidget(version_label)
 
     def _build_actions(self) -> None:
@@ -445,7 +478,28 @@ class StepFileEditor(QMainWindow):
             if self._viewport_layout is not None:
                 self._viewport_layout.addWidget(self.vtk_view, stretch=1)
             self.vtk_view.set_fullscreen_toggle(self._toggle_3d_fullscreen)
+            self._sync_ruler_controls_to_vtk()
         return self.vtk_view
+
+    def _selected_ruler_unit(self) -> str:
+        for unit_key, radio in self._unit_radios.items():
+            if radio.isChecked():
+                return unit_key
+        return "mm"
+
+    def _sync_ruler_controls_to_vtk(self) -> None:
+        if self.vtk_view is None or not hasattr(self, "ruler_check"):
+            return
+        self.vtk_view.set_ruler_unit(self._selected_ruler_unit())
+        self.vtk_view.set_ruler_visible(self.ruler_check.isChecked())
+
+    def _on_ruler_toggled(self, checked: bool) -> None:
+        if _VIEWER_AVAILABLE and self.vtk_view is not None:
+            self.vtk_view.set_ruler_visible(checked)
+
+    def _on_ruler_unit_changed(self, _button: QRadioButton) -> None:
+        if _VIEWER_AVAILABLE and self.vtk_view is not None:
+            self.vtk_view.set_ruler_unit(self._selected_ruler_unit())
 
     def _show_3d_viewport(self) -> None:
         if self._viewport_host is not None:
@@ -495,6 +549,7 @@ class StepFileEditor(QMainWindow):
 
         log.info("Entering 3D expanded view")
         self._fullscreen_transition = True
+        self._last_reflow_size = None
         self._viewport_fit_timer.stop()
         self._view3d_tab_index = self.tabs.indexOf(self._view3d_panel)
 
@@ -551,6 +606,7 @@ class StepFileEditor(QMainWindow):
         log.info("Exiting 3D expanded view")
         self._fullscreen_transition = True
         self._in_3d_fullscreen = False
+        self._last_reflow_size = None
         self._viewport_fit_timer.stop()
 
         if self.vtk_view:
@@ -634,6 +690,10 @@ class StepFileEditor(QMainWindow):
                 w, h = self.view3d_stack.width(), self.view3d_stack.height()
             if w < 32 or h < 32:
                 return
+
+            if self._last_reflow_size == (w, h):
+                return
+            self._last_reflow_size = (w, h)
 
             log.debug("3D reflow %dx%d fullscreen=%s", w, h, self._in_3d_fullscreen)
             self.vtk_view.fit_viewport(w, h)
@@ -862,6 +922,7 @@ class StepFileEditor(QMainWindow):
         if not _VIEWER_AVAILABLE:
             return
         if self.vtk_view is not None:
+            self.vtk_view.set_ruler_visible(False)
             self.vtk_view.clear()
         self.view3d_status.setText(message)
         self.view3d_stack.setCurrentWidget(self.view3d_status)
@@ -977,6 +1038,7 @@ class StepFileEditor(QMainWindow):
         self._suppress_tab_3d_refresh = False
 
         vtk.setFocus()
+        self._sync_ruler_controls_to_vtk()
         self.status_bar.showMessage(f"GPU 3D preview ready — {Path(model.source_path).name}")
         QTimer.singleShot(100, self._reflow_3d_after_resize)
 
@@ -1179,7 +1241,8 @@ def main() -> int:
     try:
         app = QApplication(sys.argv)
         app.setApplicationName(APP_DISPLAY_NAME)
-        app.setApplicationDisplayName(APP_DISPLAY_NAME)
+        # Empty so Windows does not append a second copy of the app name to the title bar.
+        app.setApplicationDisplayName("")
         app.setApplicationVersion(APP_VERSION)
         app.setOrganizationName(APP_VENDOR)
         app.setStyle("Fusion")

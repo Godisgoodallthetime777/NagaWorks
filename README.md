@@ -4,7 +4,7 @@ Desktop application to **view and edit STEP (`.stp` / `.step`) files** with a GP
 
 Published by **NagaSoftLabs.com** · [Naga Soft Labs](https://nagasoftlabs.com/)
 
-![NagaWorks](image.png)
+![NagaWorks](dashboard.png)
 ![NagaWorks](draw.png)
 ![NagaWorks](Bar1in_DPR.png)
 

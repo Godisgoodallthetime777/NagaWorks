@@ -2,7 +2,7 @@
 
 Desktop application to **view and edit STEP (`.stp` / `.step`) files** with a GPU-accelerated 3D solid preview, technical blueprint export, and pencil-sketch images.
 
-Published by **NagaWorks** · [Naga Soft Labs](https://nagasoftlabs.com/)
+Published by **NagaSoftLabs.com** · [Naga Soft Labs](https://nagasoftlabs.com/)
 
 ![Alt Text](screw.png)
 

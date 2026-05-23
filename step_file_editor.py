@@ -1048,10 +1048,7 @@ class StepFileEditor(QMainWindow):
     def _show_about(self) -> None:
         box = QMessageBox(self)
         box.setWindowTitle(APP_DISPLAY_NAME)
-        app_icon = _load_app_icon()
-        if app_icon is not None:
-            box.setWindowIcon(app_icon)
-        box.setIcon(QMessageBox.Icon.Information)
+        box.setIcon(QMessageBox.Icon.NoIcon)
         box.setTextFormat(Qt.TextFormat.RichText)
         box.setText(about_text())
         box.setStandardButtons(QMessageBox.StandardButton.Ok)

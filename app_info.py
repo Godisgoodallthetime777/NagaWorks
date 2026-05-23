@@ -43,7 +43,7 @@ def about_text() -> str:
     if logo is not None:
         logo_html = (
             f'<p align="center"><img src="file:///{logo.as_posix()}" '
-            f'width="80" alt="{APP_VENDOR}"></p>'
+            f'width="120" alt="{APP_VENDOR} logo"></p>'
         )
     return (
         logo_html

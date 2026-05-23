@@ -331,3 +331,63 @@ Current thread's C stack trace (most recent call first):
 2026-05-23 18:58:57 | INFO     | step_editor | Loaded STEP mesh: Runway.stp
 2026-05-23 18:58:58 | DEBUG    | step_editor | 3D reflow 1012x590 fullscreen=False
 2026-05-23 18:59:02 | DEBUG    | step_editor | 3D reflow 1268x583 fullscreen=False
+2026-05-23 19:02:10 | INFO     | step_editor | Loading STEP mesh: Screw4T.stp
+2026-05-23 19:02:10 | INFO     | step_editor | Loaded STEP mesh: Screw4T.stp
+2026-05-23 19:11:32 | INFO     | step_editor | Loading STEP mesh: Pin1.stp
+2026-05-23 19:11:32 | INFO     | step_editor | Loaded STEP mesh: Pin1.stp
+2026-05-23 19:11:37 | INFO     | step_editor | Loading STEP mesh: Pawl.stp
+2026-05-23 19:11:37 | INFO     | step_editor | Loaded STEP mesh: Pawl.stp
+2026-05-23 19:12:01 | INFO     | step_editor | Loading STEP mesh: Leg.stp
+2026-05-23 19:12:01 | INFO     | step_editor | Loaded STEP mesh: Leg.stp
+2026-05-23 19:12:05 | INFO     | step_editor | Loading STEP mesh: LeafSpringH.stp
+2026-05-23 19:12:05 | INFO     | step_editor | Loaded STEP mesh: LeafSpringH.stp
+2026-05-23 19:14:05 | INFO     | step_editor | Blueprint saved: B:\LiftingTable4STEP\LeafSpringH_blueprint.png
+2026-05-23 19:14:53 | INFO     | step_editor | Loading STEP mesh: LeafSpringB.stp
+2026-05-23 19:14:53 | INFO     | step_editor | Loaded STEP mesh: LeafSpringB.stp
+2026-05-23 19:14:55 | INFO     | step_editor | Loading STEP mesh: LeafSpring.stp
+2026-05-23 19:14:55 | INFO     | step_editor | Loaded STEP mesh: LeafSpring.stp
+2026-05-23 19:14:58 | INFO     | step_editor | Loading STEP mesh: CrossBar.stp
+2026-05-23 19:14:58 | INFO     | step_editor | Loaded STEP mesh: CrossBar.stp
+2026-05-23 19:15:00 | INFO     | step_editor | Loading STEP mesh: Bolt8W.stp
+2026-05-23 19:15:00 | INFO     | step_editor | Loaded STEP mesh: Bolt8W.stp
+2026-05-23 19:15:02 | INFO     | step_editor | Loading STEP mesh: Assembly1.stp
+2026-05-23 19:15:03 | INFO     | step_editor | Loaded STEP mesh: Assembly1.stp
+2026-05-23 19:17:47 | INFO     | step_editor | Pencil sketch saved: B:\LiftingTable4STEP\Assembly1_sketch.png
+2026-05-23 19:18:35 | INFO     | step_editor | Application exiting
+2026-05-23 19:21:17 | INFO     | step_editor | ========================================================================
+2026-05-23 19:21:17 | INFO     | step_editor | NagaWorks STEP File Editor V1.1 started
+2026-05-23 19:21:17 | INFO     | step_editor | Python 3.14.0 (tags/v3.14.0:ebf955d, Oct  7 2025, 10:15:03) [MSC v.1944 64 bit (AMD64)]
+2026-05-23 19:21:17 | INFO     | step_editor | Platform win32
+2026-05-23 19:21:17 | INFO     | step_editor | Log file: B:\onshape\logs\step_editor.log
+2026-05-23 19:21:17 | INFO     | step_editor | ========================================================================
+2026-05-23 19:21:19 | INFO     | step_editor | Starting application
+2026-05-23 19:21:19 | INFO     | step_editor | Main window shown
+2026-05-23 19:21:24 | INFO     | step_editor | Loading STEP mesh: Bar1in.stp
+2026-05-23 19:21:24 | INFO     | step_editor | Loaded STEP mesh: Bar1in.stp
+2026-05-23 19:21:25 | DEBUG    | step_editor | 3D reflow 1269x507 fullscreen=False
+2026-05-23 19:21:32 | INFO     | step_editor | Loading STEP mesh: Bar2.stp
+2026-05-23 19:21:33 | INFO     | step_editor | Loaded STEP mesh: Bar2.stp
+2026-05-23 19:22:34 | INFO     | step_editor | Application exiting
+2026-05-23 19:24:31 | INFO     | step_editor | ========================================================================
+2026-05-23 19:24:31 | INFO     | step_editor | NagaWorks STEP File Editor V1.1 started
+2026-05-23 19:24:31 | INFO     | step_editor | Python 3.14.0 (tags/v3.14.0:ebf955d, Oct  7 2025, 10:15:03) [MSC v.1944 64 bit (AMD64)]
+2026-05-23 19:24:31 | INFO     | step_editor | Platform win32
+2026-05-23 19:24:31 | INFO     | step_editor | Log file: B:\onshape\logs\step_editor.log
+2026-05-23 19:24:31 | INFO     | step_editor | ========================================================================
+2026-05-23 19:24:32 | INFO     | step_editor | Starting application
+2026-05-23 19:24:32 | INFO     | step_editor | Main window shown
+2026-05-23 19:24:44 | INFO     | step_editor | Loading STEP mesh: Leg.stp
+2026-05-23 19:24:44 | INFO     | step_editor | Loaded STEP mesh: Leg.stp
+2026-05-23 19:24:45 | DEBUG    | step_editor | 3D reflow 1263x450 fullscreen=False
+2026-05-23 19:27:15 | INFO     | step_editor | Application exiting
+2026-05-23 19:27:26 | INFO     | step_editor | ========================================================================
+2026-05-23 19:27:26 | INFO     | step_editor | NagaWorks STEP File Editor V1.1 started
+2026-05-23 19:27:26 | INFO     | step_editor | Python 3.14.0 (tags/v3.14.0:ebf955d, Oct  7 2025, 10:15:03) [MSC v.1944 64 bit (AMD64)]
+2026-05-23 19:27:26 | INFO     | step_editor | Platform win32
+2026-05-23 19:27:26 | INFO     | step_editor | Log file: B:\onshape\logs\step_editor.log
+2026-05-23 19:27:26 | INFO     | step_editor | ========================================================================
+2026-05-23 19:27:28 | INFO     | step_editor | Starting application
+2026-05-23 19:27:28 | INFO     | step_editor | Main window shown
+2026-05-23 19:27:31 | INFO     | step_editor | Loading STEP mesh: Bearing1.stp
+2026-05-23 19:27:31 | INFO     | step_editor | Loaded STEP mesh: Bearing1.stp
+2026-05-23 19:27:32 | DEBUG    | step_editor | 3D reflow 1268x583 fullscreen=False

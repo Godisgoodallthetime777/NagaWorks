@@ -1,6 +1,4 @@
 #!/usr/bin/env python3
-"""NagaWorks STEP File Editor — text view and GPU-accelerated 3D solid preview."""
-
 from __future__ import annotations
 
 import os

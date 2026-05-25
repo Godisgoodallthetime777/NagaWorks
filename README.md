@@ -20,7 +20,7 @@ Published by **NagaSoftLabs.com** · [Naga Soft Labs](https://nagasoftlabs.com/)
 - **Expanded 3D view** — F12 hides side panels so the model uses more of the window (Esc to exit)
 - **Blueprint export** — 2×2 orthographic sheet (Top, Front, Right, Isometric) as PNG, PDF, or SVG
 - **Pencil sketch export** — Hand-drawn style isometric image as PNG, JPEG, or PDF
-- **File browser** — Filterable list of files in the current folder
+- **File browser** — Filterable list of files in the current folder.
 - **Logging** — Diagnostics and crash info written to `logs/step_editor.log`
 
 ---
